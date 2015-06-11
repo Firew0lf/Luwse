@@ -243,7 +243,7 @@ function addRoute(path, func)
   if type(func) == "function" then
     route[path] = func
   elseif type(func) == "string" then
-    route[path] = loadstring("return "..func)
+    route[path] = loadstring("return [["..func.."]]")
   end
 end
 
