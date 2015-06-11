@@ -93,7 +93,11 @@ local statusCodes = {
   [719] = "I am not a teapot",
   --TODO add all the 7XX codes
   [799] = "End of the world",
+  --9XX
+  [900] = "This is the last error, go back please"
 }
+
+setmetatable(statusCodes, {__index=function(t,k) return "Unknown" end})
 
 errPage = {}
 route = {}
@@ -267,13 +271,17 @@ function startServer(server)
     print(client:getsockname())
     local request, err, what = parseRequest(clientReceive(client), client)
     if request then      
-      local page = ""
+      local page, stuff = "", nil
       local found = false
       for n,v in pairs(route) do
         if request.uri:match(n) == request.uri then
-          page = v(request)
+          page, stuff = v(request)
           if not page then break end
-          clientSend(client, makeResponse(page))
+          if type(page) == "number" then
+            clientSend(client, makeErrorResponse(page, stuff))
+          else
+            clientSend(client, makeResponse(page))
+          end
           found = true
           break
         end
