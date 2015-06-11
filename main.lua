@@ -139,7 +139,7 @@ end
 --------------
 local function parseRequest(request, client)
   local trequest = {}
-  if not request:match("HTTP/[%d%.]+") then return nil, "Not an HTTP request" end
+  if not request:match("HTTP/[%d%.]+") then return nil, "Not an HTTP request", request end
   trequest.method = request:match("[%u]+") --supports everythings :)
   trequest.uri = request:match("/[^%s]*")
   trequest.httpVersion = request:match("HTTP/[%d%.]+")
@@ -159,7 +159,7 @@ local function makeResponse(content, details)
   details["Content-Lenght"] = (details["Content-Lenght"] or #content)
   details["Connection"] = (details["Connection"] or "Keep-Alive")
   
-  local response = ("HTTP/1.1 "..statusCode.." "..statusCodes[statusCode].."\x13\x10")
+  local response = ("HTTP/1.1 "..statusCode.." "..statusCodes[statusCode].."\n")
   for n,v in pairs(details) do
     response = (response..n..": "..v.."\n")
   end
@@ -222,7 +222,7 @@ local function makeErrorResponse(err, details)
     errPage = htmlReplace(errPage, details)
   end
   
-  return makeResponse(errPage, {statusCode = err, ["Content-Type"] = "text/html"})
+  return makeResponse(errPage, {statusCode = err, ["Content-Type"] = "text/html; charset=utf-8"})
 end
 
 -------------
@@ -265,21 +265,26 @@ function startServer(server)
   while true do
     local client = getClient(server)
     print(client:getsockname())
-    local request = parseRequest(clientReceive(client), client)
-    local page = ""
-    local found = false
-    for n,v in pairs(route) do
-      if request.uri:match(n) == request.uri then
-        page = v(request)
-        if not page then break end
-        clientSend(client, makeResponse(page))
-        found = true
-        break
+    local request, err, what = parseRequest(clientReceive(client), client)
+    if request then      
+      local page = ""
+      local found = false
+      for n,v in pairs(route) do
+        if request.uri:match(n) == request.uri then
+          page = v(request)
+          if not page then break end
+          clientSend(client, makeResponse(page))
+          found = true
+          break
+        end
       end
-    end
-    if not found then
-      local err = makeErrorResponse(404, "Not found: '"..request.uri.."'")
-      clientSend(client, err)
+      if not found then
+        local err = makeErrorResponse(404, "Not found: '"..request.uri.."'")
+        clientSend(client, err)
+      end
+    else
+      print(err.."\n"..what)
+      clientSend(client, makeErrorResponse(400, err))
     end
     client:close()
   end
