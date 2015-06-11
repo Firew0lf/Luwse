@@ -135,7 +135,7 @@ local function clientReceive(client)
 end
 
 local function clientSend(client, data)
-  return client:send(data.."\n")
+  return client:send(data)
 end
 
 --------------
@@ -150,7 +150,12 @@ local function parseRequest(request, client)
   
   for s in request:gmatch("\n[^\n]+") do
     s = s:sub(2, -1) --remove \n
-    trequest[s:match("[%w]+")] = s:match(":%s?[%C]+"):sub(3, -1)
+    if s:match("Cookie:%s?[%C]+") then
+      trequest.cookies = (trequest.cookies or {}) --create the cookie list if it doesn't exists
+      trequest.cookies[#trequest.cookies+1] = s:match(":%s?[%C]+"):sub(3,-1)
+    else
+      trequest[s:match("[%w]+")] = s:match(":%s?[%C]+"):sub(3, -1)
+    end
   end
   
   trequest.ip = client:getsockname()
@@ -160,14 +165,19 @@ end
 local function makeResponse(content, details)
   local details = (details or {})
   local statusCode = (details.statusCode or 200)
-  details["Content-Lenght"] = (details["Content-Lenght"] or #content)
+  if content and type(content) == string then
+    details["Content-Lenght"] = (details["Content-Lenght"] or #content)
+  end
   details["Connection"] = (details["Connection"] or "Keep-Alive")
   
   local response = ("HTTP/1.1 "..statusCode.." "..statusCodes[statusCode].."\n")
   for n,v in pairs(details) do
     response = (response..n..": "..v.."\n")
   end
-  response = (response.."\n"..content.."\n\n")
+  response = (response.."\n")
+  if content then
+    response = (response.."\n"..content.."\n\n")
+  end
   return response
 end
 
@@ -279,7 +289,17 @@ function startServer(server)
           if not page then break end
           if type(page) == "number" then
             clientSend(client, makeErrorResponse(page, stuff))
-          else
+          elseif type(page) == "userdata" then
+            print("Sending chunked data")
+            clientSend(client, makeResponse(nil, stuff))
+            local buff = page:read(512)
+            while buff do
+              clientSend(client, buff)
+              buff = page:read(512)
+            end
+            page:close()
+            clientSend(client, "\n\n")
+          elseif type(page) == "string" then
             clientSend(client, makeResponse(page, stuff))
           end
           found = true
