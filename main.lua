@@ -149,8 +149,8 @@ local function parseRequest(request, client)
   trequest.httpVersion = request:match("HTTP/[%d%.]+")
   
   for s in request:gmatch("\n[^\n]+") do
-    s = s:sub(3, -1) --remove \x13\x10
-    trequest[s:match("[%w]+")] = s:match(":%s?[%w]+"):sub(3, -1)
+    s = s:sub(2, -1) --remove \n
+    trequest[s:match("[%w]+")] = s:match(":%s?[%C]+"):sub(3, -1)
   end
   
   trequest.ip = client:getsockname()
@@ -280,7 +280,7 @@ function startServer(server)
           if type(page) == "number" then
             clientSend(client, makeErrorResponse(page, stuff))
           else
-            clientSend(client, makeResponse(page))
+            clientSend(client, makeResponse(page, stuff))
           end
           found = true
           break
