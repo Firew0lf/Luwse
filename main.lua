@@ -199,13 +199,39 @@ local function htmlReplace(page, values)
   return page
 end
 
+local function htmlServerStuff(page)
+  local s = page:match("<#[^>]+>")
+  while s do
+    if s:sub(1, 10) == "<#include " then
+      local file = io.open(s:sub(11, -2), "rb")
+      if file then
+        page = page:gsub(s, file:read("*a"):gsub("%%.", "%%%1"))
+        file:close()
+      else
+        page = page:gsub(s, "<div>Document not found</div>")
+      end
+    elseif s:sub(1, 11) == "<#pinclude " then
+      local file = io.open(s:sub(12, -2), "rb")
+      if file then
+        page = page:gsub(s, file:read("*a"):gsub("%%.", "%%%1"):gsub("\n[%s]*", function(str) return ("<br>\n"..string.rep("&nbsp;", #str-1)) end))
+        file:close()
+      else
+        page = page:gsub(s, "<div>Document not found</div>")
+      end
+    end
+    
+    s = page:match("<#[^>]+>")
+  end
+  return page
+end
+
 local function htmlCode(page, values, ...)
   local final = page
   for c in page:gmatch("<&[^&]+&>") do
     local s = c:gsub("[<>&\n\t]", " ")
     local f, err = loadstring(s)
     local status, result = pcall(f, ...)
-    final = final:gsub(c:gsub("(%W)", "%%%1"), result)
+    final = final:gsub(c:gsub("%%.", "%%%1"), result)
   end
   return final
 end
@@ -270,6 +296,7 @@ function template(tpl, values)
   local ctpl = ftpl:read("*a")
   ftpl:close()
   local page = htmlReplace(ctpl, values)
+  page = htmlServerStuff(page)
   page = htmlCode(page)
   return page
 end
