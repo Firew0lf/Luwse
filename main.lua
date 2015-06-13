@@ -190,7 +190,7 @@ end
 local function htmlReplace(page, values)
   --Parsed
   page = page:gsub("{{![^}]+}}", function(str)
-    return values[str:sub(4,-3)]:gsub("<", "&lt;"):gsub(">", "&gt;")
+    return values[str:sub(4,-3)]:replace("<", "&lt;"):replace(">", "&gt;")
   end)
   --Parsing
   
@@ -208,18 +208,21 @@ local function htmlServerStuff(page)
     if s:sub(1, 10) == "<#include " then
       local file = io.open(s:sub(11, -2), "rb")
       if file then
-        page = page:gsub(s, file:read("*a"):gsub("%%.", "%%%1"))
+        page = page:replace(s, file:read("*a"))
         file:close()
       else
-        page = page:gsub(s, "<div>Document not found</div>")
+        page = page:replace(s, "<abbr title=\""..s:sub(11,-2).."\">[Document not found]</abbr>")
       end
     elseif s:sub(1, 11) == "<#pinclude " then
       local file = io.open(s:sub(12, -2), "rb")
       if file then
-        page = page:gsub(s, file:read("*a"):gsub("%%.", "%%%1"):gsub("\n[%s]*", function(str) return ("<br>\n"..string.rep("&nbsp;", #str-1)) end))
+        local text = file:read("*a")
+        text = text:gsub("<", "&lt;"):gsub(">", "&gt;")
+        text = (text:gsub("\n", "\n<br>"):gsub("<br>[%s]*", function(str) return ("<br>"..string.rep("&nbsp;", #str-4)) end))
+        page = page:replace(s, text)
         file:close()
       else
-        page = page:gsub(s, "<div>Document not found</div>")
+        page = page:replace(s, "<abbr title=\""..s:sub(12,-2).."\">[Document not found]</abbr>")
       end
     end
     
