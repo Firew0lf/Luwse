@@ -124,7 +124,6 @@ local function getClient(server, timeout)
   print("Waiting ...")
   local client = server:accept()
   client:settimeout(timeout or 10)
-  
   return client
 end
 
@@ -309,9 +308,11 @@ function startServer(server)
   --server:listen()
   while true do
     local client = getClient(server)
-    print(client:getsockname())
+    print(os.date(), select(-3, client:getsockname()))
+    
     local request, err, what = parseRequest(clientReceive(client), client)
-    if request then      
+    if request then
+      print(request.method, request.uri)
       local page, stuff = "", nil
       local found = false
       for n,v in pairs(route) do
