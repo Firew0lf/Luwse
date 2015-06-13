@@ -107,9 +107,13 @@ route = {}
 --------------------
 
 function string.replace(str, from ,to)
-  from = from:gsub("%W", "%%%1")
-  to = to:gsub("%W", "%%%1")
-  return str:gsub(from, to)
+  local final = str
+  for i=0, #str do
+    if str:sub(i+1,i+#from) == from then
+      final = (final:sub(0,i)..to..final:sub(i+#from+1, -1))
+    end
+  end
+  return final
 end
 
 ------------
@@ -231,7 +235,7 @@ local function htmlCode(page, values, ...)
     local s = c:gsub("[<>&\n\t]", " ")
     local f, err = loadstring(s)
     local status, result = pcall(f, ...)
-    final = final:gsub(c:gsub("%%.", "%%%1"), result)
+    final = final:replace(c, result)
   end
   return final
 end
