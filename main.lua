@@ -185,7 +185,7 @@ local function parseRequest(request, client)
   if trequest["Content-Length"] then
     trequest.content = clientReceive(client, tonumber(trequest["Content-Length"]))
   end
-  trequest.ip = client:getsockname()
+  trequest.ip = client:getpeername()
   return trequest
 end
 
