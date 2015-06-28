@@ -320,7 +320,7 @@ function addRoute(path, func)
   if type(func) == "function" then
     route[path] = func
   elseif type(func) == "string" then
-    route[path] = loadstring("return [["..func.."]]")
+    route[path] = func
   end
 end
 
@@ -351,7 +351,11 @@ function startServer(server)
       local found = false
       for n,v in pairs(route) do
         if request.uri:match(n) == request.uri then
-          page, stuff = v(request)
+          if type(v) == "function" then
+            page, stuff = v(request)
+          else
+            page = v
+          end
           stuff = (stuff or {})
           if not page then break end
           
