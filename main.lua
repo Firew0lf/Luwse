@@ -141,14 +141,20 @@ local function getClient(server, timeout)
   return client
 end
 
-local function clientReceive(client)
-  local data = ""
-  local buff = client:receive()
-  while buff and buff ~= "" do
-    data = (data..buff.."\n")
-    buff = client:receive()
+local function clientReceive(client, size)
+  if not size then
+    local data = ""
+    local buff = client:receive(1)
+    while buff and buff ~= "" do
+      data = (data..buff)
+      if data:sub(-4,-1) == "\r\n\r\n" then break end
+      buff = client:receive(1)
+    end
+    print("")
+    return data
+  else
+   return client:receive(size)
   end
-  return data
 end
 
 local function clientSend(client, data)
@@ -170,11 +176,15 @@ local function parseRequest(request, client)
     if s:match("Cookie:%s?[%C]+") then
       trequest.cookies = (trequest.cookies or {}) --create the cookie list if it doesn't exists
       trequest.cookies[#trequest.cookies+1] = s:match(":%s?[%C]+"):sub(3,-1)
+    elseif s:match("[^:]+") and s:match(":%s?[%C]+") then
+      trequest[s:match("[^:]+")] = s:match(":%s?[%C]+"):sub(3, -1)
     else
-      trequest[s:match("[%w]+")] = s:match(":%s?[%C]+"):sub(3, -1)
+      break
     end
   end
-  
+  if trequest["Content-Length"] then
+    trequest.content = clientReceive(client, tonumber(trequest["Content-Length"]))
+  end
   trequest.ip = client:getsockname()
   return trequest
 end
@@ -192,15 +202,15 @@ local function makeResponse(content, details)
   for n,v in pairs(details) do
     if n == "cookies" and type(v) == "table" then
       for i=1, #v do
-        response = (response.."Set-Cookie: "..v[i].."\n")
+        response = (response.."Set-Cookie: "..v[i].."\r\n")
       end
     else
-      response = (response..n..": "..v.."\n")
+      response = (response..n..": "..v.."\r\n")
     end
   end
-  response = (response.."\n")
+  response = (response.."\r\n")
   if content then
-    response = (response..content.."\n\n")
+    response = (response..content.."\r\n\r\n")
   end
   return response
 end
@@ -349,9 +359,9 @@ function startServer(server)
             clientSend(client, makeErrorResponse(page, stuff))
           elseif type(page) == "userdata" then
             local fileseek = page:seek()
-            stuff["Content-Lenght"] = (stuff["Content-Lenght"] or (page:seek("end")-fileseek))
+            stuff["Content-Length"] = (stuff["Content-Length"] or (page:seek("end")-fileseek))
             page:seek("set", fileseek)
-            print("Sending chunked data, "..stuff["Content-Lenght"].." bytes.")
+            print("Sending chunked data, "..stuff["Content-Length"].." bytes.")
             
             clientSend(client, makeResponse(nil, stuff))
             local buff = page:read(512)
