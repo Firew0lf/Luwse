@@ -91,6 +91,16 @@ local statusCodes = {
   [711] = "Convenience Store",
   [712] = "NoSQL",
   [719] = "I am not a teapot",
+  [720] = "Unpossible",
+  [721] = "Known Unknowns",
+  [722] = "Unknown Unknowns",
+  [723] = "Tricky",
+  [724] = "This line should be unreachable",
+  [725] = "It works on my machine",
+  [726] = "It's a feature, not a bug",
+  [727] = "32 bits is plenty",
+  
+  [732] = ("Fucking Unic"..string.char(0xF0, 0x9F, 0x92, 0xA9).."de"), --UTF-8 only
   --TODO add all the 7XX codes
   [799] = "End of the world",
   --9XX
@@ -114,6 +124,10 @@ function string.replace(str, from ,to)
     end
   end
   return final
+end
+
+function httpDate(time)
+  return os.date("!%a, %d %b %Y %X GMT", time)
 end
 
 ------------
@@ -168,18 +182,25 @@ end
 local function makeResponse(content, details)
   local details = (details or {})
   local statusCode = (details.statusCode or 200)
-  if content and type(content) == string then
+  if content and type(content) == "string" then
     details["Content-Lenght"] = (details["Content-Lenght"] or #content)
   end
   details["Connection"] = (details["Connection"] or "Keep-Alive")
-  
+  details["Date"] = httpDate(os.time())
+    
   local response = ("HTTP/1.1 "..statusCode.." "..statusCodes[statusCode].."\n")
   for n,v in pairs(details) do
-    response = (response..n..": "..v.."\n")
+    if n == "cookies" and type(v) == "table" then
+      for i=1, #v do
+        response = (response.."Set-Cookie: "..v[i].."\n")
+      end
+    else
+      response = (response..n..": "..v.."\n")
+    end
   end
   response = (response.."\n")
   if content then
-    response = (response.."\n"..content.."\n\n")
+    response = (response..content.."\n\n")
   end
   return response
 end
@@ -293,10 +314,6 @@ function addRoute(path, func)
   end
 end
 
-function server(port, ip)
-  return assert(socket.bind((ip or "*"), (port or 8080)))
-end
-
 function template(tpl, values)
   local ftpl = io.open("views/"..tpl..".tpl", "r")
   local ctpl = ftpl:read("*a")
@@ -305,6 +322,10 @@ function template(tpl, values)
   page = htmlServerStuff(page)
   page = htmlCode(page)
   return page
+end
+
+function server(port, ip)
+  return assert(socket.bind((ip or "*"), (port or 8080)))
 end
 
 function startServer(server)
@@ -321,11 +342,17 @@ function startServer(server)
       for n,v in pairs(route) do
         if request.uri:match(n) == request.uri then
           page, stuff = v(request)
+          stuff = (stuff or {})
           if not page then break end
+          
           if type(page) == "number" then
             clientSend(client, makeErrorResponse(page, stuff))
           elseif type(page) == "userdata" then
-            print("Sending chunked data")
+            local fileseek = page:seek()
+            stuff["Content-Lenght"] = (stuff["Content-Lenght"] or (page:seek("end")-fileseek))
+            page:seek("set", fileseek)
+            print("Sending chunked data, "..stuff["Content-Lenght"].." bytes.")
+            
             clientSend(client, makeResponse(nil, stuff))
             local buff = page:read(512)
             while buff do
