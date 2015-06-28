@@ -111,6 +111,7 @@ setmetatable(statusCodes, {__index=function(t,k) return "Unknown" end})
 
 errPage = {}
 route = {}
+methodRoute = {}
 
 --------------------
 -- Misc functions --
@@ -135,7 +136,6 @@ end
 ------------
 
 local function getClient(server, timeout)
-  print("Waiting ...")
   local client = server:accept()
   client:settimeout(timeout or 10)
   return client
@@ -150,7 +150,6 @@ local function clientReceive(client, size)
       if data:sub(-4,-1) == "\r\n\r\n" then break end
       buff = client:receive(1)
     end
-    print("")
     return data
   else
    return client:receive(size)
@@ -324,6 +323,15 @@ function addRoute(path, func)
   end
 end
 
+function addMethodRoute(method, path, func)
+  methodRoute[method] = (methodRoute[method] or {})
+  if type(func) == "function" then
+    methodRoute[method][path] = func
+  elseif type(func) == "string" then
+    methodRoute[method][path] = func
+  end
+end
+
 function template(tpl, values)
   local ftpl = io.open("views/"..tpl..".tpl", "r")
   local ctpl = ftpl:read("*a")
@@ -342,13 +350,27 @@ function startServer(server)
   --server:listen()
   while true do
     local client = getClient(server)
-    print(os.date(), select(-3, client:getsockname()))
+    print(os.date("%X %d/%m/%Y"), select(-3, client:getpeername()))
     
     local request, err, what = parseRequest(clientReceive(client), client)
+    local page, stuff = nil, nil
+    local found = false
+    
     if request then
       print(request.method, request.uri)
-      local page, stuff = "", nil
-      local found = false
+      for n,v in pairs(methodRoute[request.method] or {}) do
+        if request.uri:match(n) == request.uri then
+          if type(v) == "function" then
+            page, stuff = v(request)
+          else
+            page = v
+          end
+          stuff = (stuff or {})
+          if not page then break end
+          found = true
+        end
+      end
+      
       for n,v in pairs(route) do
         if request.uri:match(n) == request.uri then
           if type(v) == "function" then
@@ -358,38 +380,40 @@ function startServer(server)
           end
           stuff = (stuff or {})
           if not page then break end
-          
-          if type(page) == "number" then
-            clientSend(client, makeErrorResponse(page, stuff))
-          elseif type(page) == "userdata" then
-            local fileseek = page:seek()
-            stuff["Content-Length"] = (stuff["Content-Length"] or (page:seek("end")-fileseek))
-            page:seek("set", fileseek)
-            print("Sending chunked data, "..stuff["Content-Length"].." bytes.")
-            
-            clientSend(client, makeResponse(nil, stuff))
-            local buff = page:read(512)
-            while buff do
-              clientSend(client, buff)
-              buff = page:read(512)
-            end
-            page:close()
-            clientSend(client, "\n\n")
-          elseif type(page) == "string" then
-            clientSend(client, makeResponse(page, stuff))
-          end
           found = true
-          break
         end
-      end
-      if not found then
-        local err = makeErrorResponse(404, "Not found: '"..request.uri.."'")
-        clientSend(client, err)
       end
     else
       print(err.."\n"..what)
       clientSend(client, makeErrorResponse(400, err))
     end
+    
+    if type(page) == "number" then
+      clientSend(client, makeErrorResponse(page, stuff))
+    elseif type(page) == "userdata" then
+      local fileseek = page:seek()
+      stuff["Content-Length"] = (stuff["Content-Length"] or (page:seek("end")-fileseek))
+      page:seek("set", fileseek)
+      io.write("Sending chunked data, "..stuff["Content-Length"].." bytes ... ")
+      
+      clientSend(client, makeResponse(nil, stuff))
+      local buff = page:read(512)
+      while buff do
+        clientSend(client, buff)
+        buff = page:read(512)
+      end
+      page:close()
+      print("Done.")
+    elseif type(page) == "string" then
+      clientSend(client, makeResponse(page, stuff))
+    end
+    
+    if not found then
+      local err = makeErrorResponse(404, "Not found: '"..request.uri.."'")
+      clientSend(client, err)
+    end
+    
     client:close()
+    
   end
 end
