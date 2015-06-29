@@ -209,7 +209,7 @@ local function makeResponse(content, details)
   end
   response = (response.."\r\n")
   if content then
-    response = (response..content.."\r\n\r\n")
+    response = (response..content)
   end
   return response
 end
@@ -350,7 +350,7 @@ function startServer(server)
   --server:listen()
   while true do
     local client = getClient(server)
-    print(os.date("%X %d/%m/%Y"), select(-3, client:getpeername()))
+    print("["..os.date("%X %d/%m/%Y").."]", select(-3, client:getpeername()))
     
     local request, err, what = parseRequest(clientReceive(client), client)
     local page, stuff = nil, nil
@@ -394,8 +394,8 @@ function startServer(server)
       local fileseek = page:seek()
       stuff["Content-Length"] = (stuff["Content-Length"] or (page:seek("end")-fileseek))
       page:seek("set", fileseek)
-      io.write("Sending chunked data, "..stuff["Content-Length"].." bytes ... ")
-      
+      io.write("Sending a raw file, "..stuff["Content-Length"].." bytes ... ")
+      local timesend = socket.gettime()
       clientSend(client, makeResponse(nil, stuff))
       local buff = page:read(512)
       while buff do
@@ -403,12 +403,12 @@ function startServer(server)
         buff = page:read(512)
       end
       page:close()
-      print("Done.")
+      print("Done ("..(socket.gettime()-timesend).."s)")
     elseif type(page) == "string" then
       clientSend(client, makeResponse(page, stuff))
     end
     
-    if not found then
+    if not found and request then
       local err = makeErrorResponse(404, "Not found: '"..request.uri.."'")
       clientSend(client, err)
     end
