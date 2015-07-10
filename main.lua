@@ -398,18 +398,24 @@ function startServer(server)
       local timesend = socket.gettime()
       clientSend(client, makeResponse(nil, stuff))
       local buff = page:read(512)
+      local sent = 0
       while buff do
         clientSend(client, buff)
+        sent = (sent+#buff)
         buff = page:read(512)
       end
       page:close()
-      print("Done ("..(socket.gettime()-timesend).."s)")
+      if sent == stuff["Content-Length"] then
+        print("Done ("..(socket.gettime()-timesend).."s)")
+      else
+        print(math.floor(sent/stuff["Content-Length"]).."% done ("..(socket.gettime()-timesend)..")")
+      end
     elseif type(page) == "string" then
       clientSend(client, makeResponse(page, stuff))
     end
     
     if not found and request then
-      local err = makeErrorResponse(404, "Not found: '"..request.uri.."'")
+      local err = makeErrorResponse(404, "Not found: '"..request.uri.."'"..((stuff and (": "..stuff)) or ""))
       clientSend(client, err)
     end
     
