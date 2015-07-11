@@ -99,9 +99,41 @@ local statusCodes = {
   [725] = "It works on my machine",
   [726] = "It's a feature, not a bug",
   [727] = "32 bits is plenty",
-  
+  [730] = "Fucking Bower",
+  [731] = "Fucking Rubygems",
   [732] = ("Fucking Unic"..string.char(0xF0, 0x9F, 0x92, 0xA9).."de"), --UTF-8 only
+  [733] = "Fucking Deadlocks",
+  [734] = "Fucking Deferreds",
+  [735] = "Fucking IE",
+  [736] = "Fucking Race Conditions",
+  [737] = "FuckThreadsing",
+  [738] = "Fucking Bundler",
+  [739] = "Fucking Windows",
+  [740] = "Computer says no",
+  [741] = "Compiling",
+  [742] = "A kitten dies",
+  [743] = "I thought I knew regular expressions",
+  [744] = "Y U NO write integration tests?",
+  [745] = "I don't always test my code, but when I do I do it in production",
+  [746] = "Missed Ballmer Peak",
+  [747] = "Motherfucking Snakes on the Motherfucking Plane",
+  [748] = "Confounded by Ponies",
+  [749] = "Reserved for Chuck Norris",
+  [750] = "Didn't bother to compile it",
+  [753] = "Syntax Error",
+  [754] = "Too many semi-colons",
+  [755] = "Not enough semi-colons",
+  [756] = "Insufficiently polite",
+  [757] = "Excessively polite",
+  [758] = "Unexpected T_PAAMAYIM_NEKUDOTAYIM",
+  
   --TODO add all the 7XX codes
+  [791] = "The Internet shut down due to copyright restrictions.",
+  [792] = "Climate change driven catastrophic weather event",
+  [793] = "Zombie Apocalypse",
+  [794] = "Someone let PG near a REPL",
+  [795] = "#heartbleed",
+  [797] = "This is the last page of the Internet. Go back",
   [799] = "End of the world",
   --9XX
   [900] = "This is the last error, go back please"
@@ -203,7 +235,7 @@ local function makeResponse(content, details)
       for i=1, #v do
         response = (response.."Set-Cookie: "..v[i].."\r\n")
       end
-    else
+    elseif n:sub(1,1) == n:sub(1,1):upper() then --only send fields starting with an uppercase character
       response = (response..n..": "..v.."\r\n")
     end
   end
@@ -342,14 +374,18 @@ function template(tpl, values)
   return page
 end
 
+function statusCode(s)
+  return statusCodes[s]
+end
+
 function server(port, ip)
-  return assert(socket.bind((ip or "*"), (port or 8080)))
+  return {sock=assert(socket.bind((ip or "*"), (port or 8080)))}
 end
 
 function startServer(server)
   --server:listen()
   while true do
-    local client = getClient(server)
+    local client = getClient(server.sock)
     print("["..os.date("%X %d/%m/%Y").."]", select(-3, client:getpeername()))
     
     local request, err, what = parseRequest(clientReceive(client), client)
